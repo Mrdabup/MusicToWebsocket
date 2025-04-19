@@ -13,27 +13,20 @@ key = 'null'
 
 # Websocket Config
 HOST = "localhost"
-PORT = 8081
+PORT = 8080
 wsClients = set()
 
 # YTDM CONFIG
 appId = "tojg"
-code = '0000'
 ytdm_baseUrl = "http://localhost:9863"
 ytdm_apiBase = ytdm_baseUrl + "/api/v1"
-
-ytdmJsonConfig = {
-    "appId":  appId,
-    "appName": "ytmToWeb",
-    "appVersion": "0.0.1"
-}
-
+ytdm_authRequest = ytdm_baseUrl + "/auth/request"
 
 # THYTM CONFIG
 thytm_baseUrl = "http://localhost:26538/api/v1"
 thytm_statusUrl = thytm_baseUrl + '/song'
 
-# JSON config for the app
+# JSON config for the py app
 importantJson = {
     "appVer": appVer,
     "key": key
@@ -44,37 +37,44 @@ importantJson = {
 def ytdm_getAuth():
     print("Getting Auth...")
 
-
-# th-ch's YTM Logic
-
-def thYtm_getStatus():
-    print("ass")
-
 # Websocket Logic
 async def broadcastMusicStatus():
     while True:
-        thch_status = requests.get(thytm_statusUrl)
-        print(thch_status.json())
+        global appVer
+        if appVer == "1":
+            thch_status = requests.get(thytm_statusUrl)
+            thchStatusJson = thch_status.json()
+            song_name = thchStatusJson['alternativeTitle']
+            author = thchStatusJson['artist']
+            videoProgress = int(thchStatusJson['elapsedSeconds'])
+            duration = int(thchStatusJson['songDuration'])
+            ads = "False" # Keep this false! This bool is only used in YTMD but is here for sake of not breaking 
+            formattedData = f"{song_name} - {author}|{videoProgress}|{duration}|{ads}"
+            print(formattedData)
+        else:
+            formattedData = f"Sorry mate! We are working on one thing..."
         for clients in wsClients:
             try:
-                await clients.send(thch_status.json())
+                await clients.send(formattedData)
             except:
-                print("ERROR ON SENDING MESSAGES!")
-        await asyncio.sleep(3)
+                print("ERROR ON SENDING MESSAGE! CLIENT DROPPED BEFORE RECIVING MESSAGE!")
+        await asyncio.sleep(5) # YTDM only allows clients to look at its API every 5 seconds, so it limits thch.
 
 
 async def websocketMessages(websocket):
     print("Client connected")
+    wsClients.add(websocket)
+    # Stupid me forgot to add the client to the set
     async for message in websocket:
         await websocket.send(message)
+    wsClients.remove(websocket)
+    # Also stupid me forgot to remove the client
     print("Client disconnected")
 
 async def websocketMain():
     print(f"Hello! Hosting at:\nws://{HOST}:{PORT}")
     wsServer = await websockets.serve(websocketMessages, HOST, PORT)
     await asyncio.gather(broadcastMusicStatus())
-#    async with serve(broadcastMusicStatus, host, port) as server:
-#        await server.serve_forever()
 
 if __name__ == "__main__":
     if(os.path.exists("key.json")):
@@ -88,6 +88,7 @@ if __name__ == "__main__":
         asyncio.run(websocketMain())
     elif appVer == "2":
         print("yay")
+        asyncio.run(websocketMain())
     else:
         print("Who the fuck asked? Go to github and open an issue!") # Just thought this was funny - Jckl
         exit
