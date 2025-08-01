@@ -4,38 +4,27 @@ import websockets
 import asyncio
 from websockets import serve
 import requests
-
-#import re: We don't need this right now
-
-# Variable init 
-appVer = 0
-key = 'null'
+from ytmd_sdk import Events, YTMD, Parser
 
 # Websocket Config
 HOST = "localhost"
 PORT = 8080
 wsClients = set()
 
-# YTDM CONFIG
-appId = "tojg"
-ytdm_baseUrl = "http://localhost:9863"
-ytdm_apiBase = ytdm_baseUrl + "/api/v1"
-ytdm_authRequest = ytdm_baseUrl + "/auth/request"
+# YTMD Config
+ytmd = YTMD("tojg", "MusicToWebsocket", "1.0.0")
 
-# THYTM CONFIG
+# THYTM Config
 thytm_baseUrl = "http://localhost:26538/api/v1"
 thytm_statusUrl = thytm_baseUrl + '/song'
 
-# JSON config for the py app
-importantJson = {
-    "appVer": appVer,
-    "key": key
-}
+# EddyAPI Config
+eddy_baseUrl = "http://localhost:3665"
+eddy_statusUrl = eddy_baseUrl + "/now-playing"
 
 # YTDM Logic
-
-def ytdm_getAuth():
-    print("Getting Auth...")
+def ytdm_logic():
+    key = ytmd.authenticate()
 
 # Websocket Logic
 async def broadcastMusicStatus():
@@ -48,27 +37,57 @@ async def broadcastMusicStatus():
             author = thchStatusJson['artist']
             videoProgress = int(thchStatusJson['elapsedSeconds'])
             duration = int(thchStatusJson['songDuration'])
-            ads = "False" # Keep this false! This bool is only used in YTMD but is here for sake of not breaking 
+            ads = "False"
             formattedData = f"{song_name} - {author}|{videoProgress}|{duration}|{ads}"
             print(formattedData)
-        else:
-            formattedData = f"Sorry mate! We are working on one thing..."
+            await asyncio.sleep(.1)
+        if appVer == "2":
+           ytdm_status = ytmd.get_state()
+           ytdm_statusJson = ytdm_status.json()
+           song_name = ytdm_statusJson["video"]["title"]
+           author = ytdm_statusJson["video"]["author"]
+           videoProgress = int(ytdm_statusJson["player"]["videoProgress"])
+           duration = int(ytdm_statusJson["video"]["durationSeconds"])
+           ads = bool(ytdm_statusJson["player"]["adPlaying"])
+           formattedData = f"{song_name} - {author}|{videoProgress}|{duration}|{ads}"
+           print(formattedData)
+           await asyncio.sleep(5)
+        if appVer == "3":
+            eddyStatus = requests.get(eddy_statusUrl)
+            eddyStatusJson = eddyStatus.json()
+            song_name = eddyStatusJson["item"]["title"]
+            authorNames = eddyStatusJson.get("item", {}).get("artists", {})
+            authorNameList = [names['name'] for names in authorNames]
+            if len(authorNameList) == 1:
+                author = authorNameList[0]
+                print(author)
+            elif len(authorNameList)== 2:
+                author = (" & ".join(authorNameList))
+                print(author)
+            else:
+                author = (", ".join(authorNameList[:-1]) + " & " + authorNameList[-1])
+                print(author)
+            author = author
+            videoProgress = int(eddyStatusJson["position"])
+            duration = int(eddyStatusJson["duration"])
+            ads = "false"
+            formattedData = f"{song_name} - {author}|{videoProgress}|{duration}|{ads}"
+            print(formattedData)
+            await asyncio.sleep(2)
         for clients in wsClients:
             try:
                 await clients.send(formattedData)
             except:
                 print("ERROR ON SENDING MESSAGE! CLIENT DROPPED BEFORE RECIVING MESSAGE!")
-        await asyncio.sleep(5) # YTDM only allows clients to look at its API every 5 seconds, so it limits thch.
+# If ads are programmed to be false, it might be because A: There's no function to detect it or B: It's a subscription service (like Tidal or YTM Premium)
 
 
 async def websocketMessages(websocket):
     print("Client connected")
     wsClients.add(websocket)
-    # Stupid me forgot to add the client to the set
     async for message in websocket:
         await websocket.send(message)
     wsClients.remove(websocket)
-    # Also stupid me forgot to remove the client
     print("Client disconnected")
 
 async def websocketMain():
@@ -79,16 +98,21 @@ async def websocketMain():
 if __name__ == "__main__":
     if(os.path.exists("key.json")):
         print("Skipping some stuff...")
-    # If we find key.json, we load it into memory and execute the program
+    # TODO: If we find key.json, we load it into memory and execute the program
     print("Hello World!")
-    appVer = input("Please enter a number for the following:\n1. th-ch's YoutubeMusic\n2. YTMDesktop\n")
+    appVer = input("Please enter a number for the following:\n\n1. th-ch's YoutubeMusic\n2. YTMDesktop\n3. TIDAL via TIDALuna and eddyapi\n\nYour Choice: ")
     if appVer == "1":
-        print("ughh")
-        #thytm_status()
         asyncio.run(websocketMain())
-    elif appVer == "2":
-        print("yay")
+    if appVer == "2":
+        ytdm_logic()
+        print("FOR THE TIME BEING: I haven't done the key implementation, so you must remove the companion and enable authorization again once you exit out of this program!")
         asyncio.run(websocketMain())
+    if appVer == "3":
+        asyncio.run(websocketMain())    
     else:
-        print("Who the fuck asked? Go to github and open an issue!") # Just thought this was funny - Jckl
+        print("This isn't a valid request... Go to github and open an issue!")
         exit
+
+
+if appVer == "2":
+    ytmd.connect()

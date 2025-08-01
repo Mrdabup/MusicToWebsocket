@@ -1,2 +1,2 @@
 # YtmdToWebsocket
-### An easy way to connect to [th-ch's YoutubeMusic](https://google.com) and [YTMDesktop](google.com)
+### An easy way to connect to [th-ch's YoutubeMusic](https://github.com/th-ch/youtube-music), [YTMDesktop](https://github.com/ytmdesktop/ytmdesktop), and [Tidal via TidaLuna and eddyapi](https://github.com/Inrixia/TidaLuna) (Must have a valid subscription for any of these, I am not responsible if you break the TOS of any of these platforms.)
