@@ -37,10 +37,10 @@ async def broadcastMusicStatus():
             author = thchStatusJson['artist']
             videoProgress = int(thchStatusJson['elapsedSeconds'])
             duration = int(thchStatusJson['songDuration'])
-            ads = "False"
-            formattedData = f"{song_name} - {author}|{videoProgress}|{duration}|{ads}"
-            print(formattedData)
-            await asyncio.sleep(.1)
+            paused = "False"
+            formattedData = f"{song_name} - {author}|{videoProgress}|{duration}|{paused}"
+            await asyncio.sleep(.5)
+
         if appVer == "2":
            ytdm_status = ytmd.get_state()
            ytdm_statusJson = ytdm_status.json()
@@ -48,10 +48,10 @@ async def broadcastMusicStatus():
            author = ytdm_statusJson["video"]["author"]
            videoProgress = int(ytdm_statusJson["player"]["videoProgress"])
            duration = int(ytdm_statusJson["video"]["durationSeconds"])
-           ads = bool(ytdm_statusJson["player"]["adPlaying"])
-           formattedData = f"{song_name} - {author}|{videoProgress}|{duration}|{ads}"
-           print(formattedData)
+           paused = bool(ytdm_statusJson["player"]["adPlaying"])
+           formattedData = f"{song_name} - {author}|{videoProgress}|{duration}|{paused}"
            await asyncio.sleep(5)
+
         if appVer == "3":
             eddyStatus = requests.get(eddy_statusUrl)
             eddyStatusJson = eddyStatus.json()
@@ -60,35 +60,35 @@ async def broadcastMusicStatus():
             authorNameList = [names['name'] for names in authorNames]
             if len(authorNameList) == 1:
                 author = authorNameList[0]
-                print(author)
-            elif len(authorNameList)== 2:
+            elif len(authorNameList) == 2:
                 author = (" & ".join(authorNameList))
-                print(author)
             else:
                 author = (", ".join(authorNameList[:-1]) + " & " + authorNameList[-1])
-                print(author)
             author = author
-            videoProgress = int(eddyStatusJson["position"])
             duration = int(eddyStatusJson["duration"])
-            ads = "false"
-            formattedData = f"{song_name} - {author}|{videoProgress}|{duration}|{ads}"
-            print(formattedData)
-            await asyncio.sleep(2)
+            paused = bool(eddyStatusJson["paused"])
+            if paused == False:
+                videoProgress = int(eddyStatusJson["position"])
+                lastVideoProgress = int(eddyStatusJson["lastUpdatedPosition"])
+            else:
+                videoProgress = lastVideoProgress
+            formattedData = f"{song_name} - {author}|{videoProgress}|{duration}|{paused}"
+            await asyncio.sleep(.5)
+
         for clients in wsClients:
-            try:
-                await clients.send(formattedData)
-            except:
-                print("ERROR ON SENDING MESSAGE! CLIENT DROPPED BEFORE RECIVING MESSAGE!")
-# If ads are programmed to be false, it might be because A: There's no function to detect it or B: It's a subscription service (like Tidal or YTM Premium)
+            await clients.send(formattedData)
 
 
 async def websocketMessages(websocket):
     print("Client connected")
     wsClients.add(websocket)
-    async for message in websocket:
-        await websocket.send(message)
+    try:
+        async for message in websocket:
+            await websocket.send(message)
+    except:
+        pass
     wsClients.remove(websocket)
-    print("Client disconnected")
+    print("Client disconnected.")
 
 async def websocketMain():
     print(f"Hello! Hosting at:\nws://{HOST}:{PORT}")
